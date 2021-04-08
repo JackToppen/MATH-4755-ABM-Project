@@ -27,7 +27,7 @@ end
 to go
   ask dogs [
     rt random-float 360
-    fd 0.1
+    fd 1
   ]
   tick
 end
@@ -35,11 +35,11 @@ end
 GRAPHICS-WINDOW
 210
 10
-734
-534
+473
+274
 -1
 -1
-10.0
+5.0
 1
 10
 1
