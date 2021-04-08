@@ -1,69 +1,168 @@
-extensions [vid csv]
-breed [dogs dog]
+extensions [ vid csv ]
 
-globals [things]
+turtles-own
+  [ sick? immune? ]
 
-turtles-own [thingy]
-patches-own []
+globals
+  [ %infected %immune ]
 
 to setup
-
-  show shapes
   clear-all
-  reset-ticks
-  vid:reset-recorder
 
-  set things 0
+  create-turtles number-people
+    [ setxy random-xcor random-ycor
+      set sick? false
+      set immune? false
+      set size 1  ;; easier to see
+      get-healthy ]
+  ask n-of initial_sick turtles [ get-sick ]
+
+  ask patches [
+    set pcolor green
+  ]
+
+  update-global-variables
+  update-display
 
   set-default-shape turtles "dog"
-
-  create-dogs 1000 [
-    set thingy random 10
-    setxy random-xcor random-ycor
-  ]
+  vid:reset-recorder
+  reset-ticks
 end
 
+to get-sick ;; turtle procedure
+  set sick? true
+  set immune? false
+end
+
+to get-healthy ;; turtle procedure
+  set sick? false
+  set immune? false
+end
+
+to become-immune ;; turtle procedure
+  set sick? false
+  set immune? true
+end
 
 to go
-  ask dogs [
-    rt random-float 360
-    fd 0.1
+  ask turtles [
+
+    move
+    poop
+    if sick? [ recover ]
+    if sick? [ infect ]
+    if immune? [ lose-immunity ]
   ]
+
+  ask patches [
+    if pcolor = brown [
+      if random-float 1 < 0.01
+      [ set pcolor green]
+    ]
+  ]
+  update-global-variables
+  update-display
   tick
 end
+
+
+to move ;; turtle procedure
+  rt random 100
+  lt random 100
+  fd 0.1
+end
+
+to infect ;; turtle procedure
+  ask other turtles-here with [ not sick? and not immune? ]
+    [ if random-float 1 < prob_infect
+      [ set sick? true
+        set immune? false
+  ] ]
+end
+
+to recover ;; turtle procedure
+  if random-float 1 < prob_recover   ;; either recover or die
+      [ set sick? false
+        set immune? true
+  ]
+end
+
+to lose-immunity ;; turtle procedure
+  if random-float 1 < prob_lose_immunity   ;; either recover or die
+      [ set sick? false
+        set immune? false
+  ]
+end
+
+to poop
+  if random-float 1 < 0.01
+      [ set pcolor brown
+  ]
+end
+
+
+
+to update-global-variables
+  if count turtles > 0
+    [ set %infected (count turtles with [ sick? ] / count turtles) * 100
+      set %immune (count turtles with [ immune? ] / count turtles) * 100 ]
+end
+
+to update-display
+  ask turtles
+  [set color ifelse-value sick? [ red ] [ ifelse-value immune? [ grey ] [ green ] ] ]
+end
+
+
+
 @#$#@#$#@
 GRAPHICS-WINDOW
-210
+278
 10
-734
-534
+741
+474
 -1
 -1
-10.0
+21.7
 1
 10
 1
 1
 1
 0
-0
-0
 1
-0
-50
-0
-50
+1
+1
+-10
+10
+-10
+10
 1
 1
 1
 ticks
 30.0
 
+SLIDER
+40
+130
+234
+163
+prob_infect
+prob_infect
+0.0
+1
+0.5
+0.01
+1
+NIL
+HORIZONTAL
+
 BUTTON
-105
-158
-168
-191
+62
+85
+132
+120
 NIL
 setup
 NIL
@@ -77,10 +176,10 @@ NIL
 1
 
 BUTTON
-124
-241
-187
-274
+138
+85
+209
+121
 NIL
 go
 T
@@ -91,44 +190,246 @@ NIL
 NIL
 NIL
 NIL
+0
+
+PLOT
+771
+16
+1317
+476
+Populations
+ticks
+people
+0.0
+52.0
+0.0
+200.0
+true
+true
+"" ""
+PENS
+"Infected" 1.0 0 -2674135 true "" "plot count turtles with [ sick? ]"
+"Recovered" 1.0 0 -7500403 true "" "plot count turtles with [ immune? ]"
+"Susceptible" 1.0 0 -10899396 true "" "plot count turtles with [ not sick? and not immune? ]"
+
+SLIDER
+40
+10
+234
+43
+number-people
+number-people
+10
+300
+300.0
 1
+1
+NIL
+HORIZONTAL
+
+MONITOR
+27
+260
+102
+305
+NIL
+%infected
+1
+1
+11
+
+MONITOR
+104
+260
+178
+305
+NIL
+%immune
+1
+1
+11
+
+MONITOR
+178
+261
+255
+306
+Total ticks
+ticks
+1
+1
+11
+
+SLIDER
+39
+163
+235
+196
+prob_recover
+prob_recover
+0
+0.1
+0.02
+0.001
+1
+NIL
+HORIZONTAL
+
+SLIDER
+38
+196
+235
+229
+prob_lose_immunity
+prob_lose_immunity
+0
+0.1
+0.005
+0.001
+1
+NIL
+HORIZONTAL
+
+SLIDER
+40
+42
+234
+75
+initial_sick
+initial_sick
+0
+100
+10.0
+1
+1
+NIL
+HORIZONTAL
 
 @#$#@#$#@
 ## WHAT IS IT?
 
-(a general understanding of what the model is trying to show or explain)
+This model simulates the transmission and perpetuation of a virus in a human population.
+
+Ecological biologists have suggested a number of factors which may influence the survival of a directly transmitted virus within a population. (Yorke, et al. "Seasonality and the requirements for perpetuation and eradication of viruses in populations." Journal of Epidemiology, volume 109, pages 103-123)
 
 ## HOW IT WORKS
 
-(what rules the agents use to create the overall behavior of the model)
+The model is initialized with 150 people, of which 10 are infected.  People move randomly about the world in one of three states: healthy but susceptible to infection (green), sick and infectious (red), and healthy and immune (gray). People may die of infection or old age.  When the population dips below the environment's "carrying capacity" (set at 300 in this model) healthy people may produce healthy (but susceptible) offspring.
+
+Some of these factors are summarized below with an explanation of how each one is treated in this model.
+
+### The density of the population
+
+Population density affects how often infected, immune and susceptible individuals come into contact with each other. You can change the size of the initial population through the NUMBER-PEOPLE slider.
+
+### Population turnover
+
+As individuals die, some who die will be infected, some will be susceptible and some will be immune.  All the new individuals who are born, replacing those who die, will be susceptible.  People may die from the virus, the chances of which are determined by the slider CHANCE-RECOVER, or they may die of old age.
+
+In this model, people die of old age at the age of 50 years.  Reproduction rate is constant in this model.  Each turn, if the carrying capacity hasn't been reached, every healthy individual has a 1% chance to reproduce.
+
+### Degree of immunity
+
+If a person has been infected and recovered, how immune are they to the virus?  We often assume that immunity lasts a lifetime and is assured, but in some cases immunity wears off in time and immunity might not be absolutely secure.  In this model, immunity is secure, but it only lasts for a year.
+
+### Infectiousness (or transmissibility)
+
+How easily does the virus spread?  Some viruses with which we are familiar spread very easily.  Some viruses spread from the smallest contact every time.  Others (the HIV virus, which is responsible for AIDS, for example) require significant contact, perhaps many times, before the virus is transmitted.  In this model, infectiousness is determined by the INFECTIOUSNESS slider.
+
+### Duration of infectiousness
+
+How long is a person infected before they either recover or die?  This length of time is essentially the virus's window of opportunity for transmission to new hosts. In this model, duration of infectiousness is determined by the DURATION slider.
+
+### Hard-coded parameters
+
+Four important parameters of this model are set as constants in the code (See `setup-constants` procedure). They can be exposed as sliders if desired. The turtles’ lifespan is set to 50 years, the carrying capacity of the world is set to 300, the duration of immunity is set to 52 weeks, and the birth-rate is set to a 1 in 100 chance of reproducing per tick when the number of people is less than the carrying capacity.
 
 ## HOW TO USE IT
 
-(how to use the model, including a description of each of the items in the Interface tab)
+Each "tick" represents a week in the time scale of this model.
+
+The INFECTIOUSNESS slider determines how great the chance is that virus transmission will occur when an infected person and susceptible person occupy the same patch.  For instance, when the slider is set to 50, the virus will spread roughly once every two chance encounters.
+
+The DURATION slider determines the number of weeks before an infected person either dies or recovers.
+
+The CHANCE-RECOVER slider controls the likelihood that an infection will end in recovery/immunity.  When this slider is set at zero, for instance, the infection is always deadly.
+
+The SETUP button resets the graphics and plots and randomly distributes NUMBER-PEOPLE in the view. All but 10 of the people are set to be green susceptible people and 10 red infected people (of randomly distributed ages).  The GO button starts the simulation and the plotting function.
+
+The TURTLE-SHAPE chooser controls whether the people are visualized as person shapes or as circles.
+
+Three output monitors show the percent of the population that is infected, the percent that is immune, and the number of years that have passed.  The plot shows (in their respective colors) the number of susceptible, infected, and immune people.  It also shows the number of individuals in the total population in blue.
 
 ## THINGS TO NOTICE
 
-(suggested things for the user to notice while running the model)
+The factors controlled by the three sliders interact to influence how likely the virus is to thrive in this population.  Notice that in all cases, these factors must create a balance in which an adequate number of potential hosts remain available to the virus and in which the virus can adequately access those hosts.
+
+Often there will initially be an explosion of infection since no one in the population is immune.  This approximates the initial "outbreak" of a viral infection in a population, one that often has devastating consequences for the humans concerned. Soon, however, the virus becomes less common as the population dynamics change.  What ultimately happens to the virus is determined by the factors controlled by the sliders.
+
+Notice that viruses that are too successful at first (infecting almost everyone) may not survive in the long term.  Since everyone infected generally dies or becomes immune as a result, the potential number of hosts is often limited.  The exception to the above is when the DURATION slider is set so high that population turnover (reproduction) can keep up and provide new hosts.
 
 ## THINGS TO TRY
 
-(suggested things for the user to try to do (move sliders, switches, etc.) with the model)
+Think about how different slider values might approximate the dynamics of real-life viruses.  The famous Ebola virus in central Africa has a very short duration, a very high infectiousness value, and an extremely low recovery rate. For all the fear this virus has raised, how successful is it?  Set the sliders appropriately and watch what happens.
+
+The HIV virus, which causes AIDS, has an extremely long duration, an extremely low recovery rate, but an extremely low infectiousness value.  How does a virus with these slider values fare in this model?
 
 ## EXTENDING THE MODEL
 
-(suggested things to add or change in the Code tab to make the model more complicated, detailed, accurate, etc.)
+Add additional sliders controlling the carrying capacity of the world (how many people can be in the world at one time), the average lifespan of the people and their birth-rate.
 
-## NETLOGO FEATURES
+Build a similar model simulating viral infection of a non-human host with very different reproductive rates, lifespans, and population densities.
 
-(interesting or unusual features of NetLogo that the model uses, particularly in the Code tab; or where workarounds were needed for missing features)
+Add a slider controlling how long immunity lasts. You could also make immunity imperfect, so that immune turtles still have a small chance of getting infected. This chance could get higher over time.
+
+## VISUALIZATION
+
+The circle visualization of the model comes from guidelines presented in
+Kornhauser, D., Wilensky, U., & Rand, W. (2009). http://ccl.northwestern.edu/papers/2009/Kornhauser,Wilensky&Rand_DesignGuidelinesABMViz.pdf.
+
+At the lowest level, perceptual impediments arise when we exceed the limitations of our low-level visual system. Visual features that are difficult to distinguish can disable our pre-attentive processing capabilities. Pre-attentive processing can be hindered by other cognitive phenomena such as interference between visual features (Healey 2006).
+
+The circle visualization in this model is supposed to make it easier to see when agents interact because overlap is easier to see between circles than between the "people" shapes. In the circle visualization, the circles merge to create new compound shapes. Thus, it is easier to perceive new compound shapes in the circle visualization.
+Does the circle visualization make it easier for you to see what is happening?
 
 ## RELATED MODELS
 
-(models in the NetLogo Models Library and elsewhere which are of related interest)
+* HIV
+* Virus on a Network
 
 ## CREDITS AND REFERENCES
 
-(a reference to the model's URL on the web if it has one, as well as any other necessary credits, citations, and links)
+This model can show an alternate visualization of the Virus model using circles to represent the people. It uses visualization techniques as recommended in the paper:
+
+Kornhauser, D., Wilensky, U., & Rand, W. (2009). Design guidelines for agent based model visualization. Journal of Artificial Societies and Social Simulation, JASSS, 12(2), 1.
+
+## HOW TO CITE
+
+If you mention this model or the NetLogo software in a publication, we ask that you include the citations below.
+
+For the model itself:
+
+* Wilensky, U. (1998).  NetLogo Virus model.  http://ccl.northwestern.edu/netlogo/models/Virus.  Center for Connected Learning and Computer-Based Modeling, Northwestern University, Evanston, IL.
+
+Please cite the NetLogo software as:
+
+* Wilensky, U. (1999). NetLogo. http://ccl.northwestern.edu/netlogo/. Center for Connected Learning and Computer-Based Modeling, Northwestern University, Evanston, IL.
+
+## COPYRIGHT AND LICENSE
+
+Copyright 1998 Uri Wilensky.
+
+![CC BY-NC-SA 3.0](http://ccl.northwestern.edu/images/creativecommons/byncsa.png)
+
+This work is licensed under the Creative Commons Attribution-NonCommercial-ShareAlike 3.0 License.  To view a copy of this license, visit https://creativecommons.org/licenses/by-nc-sa/3.0/ or send a letter to Creative Commons, 559 Nathan Abbott Way, Stanford, California 94305, USA.
+
+Commercial licenses are also available. To inquire about commercial licenses, please contact Uri Wilensky at uri@northwestern.edu.
+
+This model was created as part of the project: CONNECTED MATHEMATICS: MAKING SENSE OF COMPLEX PHENOMENA THROUGH BUILDING OBJECT-BASED PARALLEL MODELS (OBPML).  The project gratefully acknowledges the support of the National Science Foundation (Applications of Advanced Technologies Program) -- grant numbers RED #9552950 and REC #9632612.
+
+This model was converted to NetLogo as part of the projects: PARTICIPATORY SIMULATIONS: NETWORK-BASED DESIGN FOR SYSTEMS LEARNING IN CLASSROOMS and/or INTEGRATED SIMULATION AND MODELING ENVIRONMENT. The project gratefully acknowledges the support of the National Science Foundation (REPP & ROLE programs) -- grant numbers REC #9814682 and REC-0126227. Converted from StarLogoT to NetLogo, 2001.
+
+<!-- 1998 2001 -->
 @#$#@#$#@
 default
 true
@@ -338,22 +639,6 @@ Polygon -7500403 true true 135 105 90 60 45 45 75 105 135 135
 Polygon -7500403 true true 165 105 165 135 225 105 255 45 210 60
 Polygon -7500403 true true 135 90 120 45 150 15 180 45 165 90
 
-sheep
-false
-15
-Circle -1 true true 203 65 88
-Circle -1 true true 70 65 162
-Circle -1 true true 150 105 120
-Polygon -7500403 true false 218 120 240 165 255 165 278 120
-Circle -7500403 true false 214 72 67
-Rectangle -1 true true 164 223 179 298
-Polygon -1 true true 45 285 30 285 30 240 15 195 45 210
-Circle -1 true true 3 83 150
-Rectangle -1 true true 65 221 80 296
-Polygon -1 true true 195 285 210 285 210 240 240 210 195 210
-Polygon -7500403 true false 276 85 285 105 302 99 294 83
-Polygon -7500403 true false 219 85 210 105 193 99 201 83
-
 square
 false
 0
@@ -437,13 +722,6 @@ Line -7500403 true 216 40 79 269
 Line -7500403 true 40 84 269 221
 Line -7500403 true 40 216 269 79
 Line -7500403 true 84 40 221 269
-
-wolf
-false
-0
-Polygon -16777216 true false 253 133 245 131 245 133
-Polygon -7500403 true true 2 194 13 197 30 191 38 193 38 205 20 226 20 257 27 265 38 266 40 260 31 253 31 230 60 206 68 198 75 209 66 228 65 243 82 261 84 268 100 267 103 261 77 239 79 231 100 207 98 196 119 201 143 202 160 195 166 210 172 213 173 238 167 251 160 248 154 265 169 264 178 247 186 240 198 260 200 271 217 271 219 262 207 258 195 230 192 198 210 184 227 164 242 144 259 145 284 151 277 141 293 140 299 134 297 127 273 119 270 105
-Polygon -7500403 true true -1 195 14 180 36 166 40 153 53 140 82 131 134 133 159 126 188 115 227 108 236 102 238 98 268 86 269 92 281 87 269 103 269 113
 
 x
 false
