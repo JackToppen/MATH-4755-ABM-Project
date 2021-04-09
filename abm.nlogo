@@ -1,36 +1,51 @@
 extensions [ vid csv ]
-globals [ %infected ]
-turtles-own [ sick? ]
-patches-own [ infected_poop ]
+breed [ dogs dog ]
+globals [ %susceptible %exposed %infected %susceptible_shelter %exposed_shelter %infected_shelter ]
+turtles-own [ state shelter ]
+patches-own [ infected ]
 
 
 to setup
   ; clear space
   clear-all
 
-  ; create this many turtles with initial conditions
-  create-turtles number-people [
-    setxy random-xcor random-ycor
-    set sick? false
+  ; set agent shape to "dog"
+  set-default-shape dogs "dog"
+
+  ; create this many dogs in the park
+  create-dogs number-park [
     set size 1
-    get-healthy
+    set shelter false
+    random_park
+    become-susceptible
   ]
 
-  ; set some turtles to be initially sick
-  ask n-of initial_sick turtles [ get-sick ]
+  ; create this many dogs in the shelter
+  create-dogs number-shelter [
+    set size 1
+    set shelter true
+    random_shelter
+    become-susceptible
+  ]
 
-  ; set patch initials to color green and not infected poop
+  ; set some dogs to be initially infected
+  ask n-of sick-park dogs with [not shelter] [
+    become-infected
+  ]
+
+  ; set some dogs to be initially infected
+  ask n-of sick-shelter dogs with [shelter] [
+    become-infected
+  ]
+
+  ; set patch initials to not infected poop
   ask patches [
-    set pcolor green
-    set infected_poop false
+    set infected false
+    patch_default
   ]
 
   ; update trackers
-  update-global-variables
-  update-display
-
-  ; set shape to "dog"
-  set-default-shape turtles "dog"
+  update-globals
 
   ; reset the video and ticks
   vid:reset-recorder
@@ -38,98 +53,206 @@ to setup
 end
 
 
-to get-sick
-  set sick? true
-end
-
-
-to get-healthy
-  set sick? false
-end
-
 to go
-  ask turtles [
+  ask dogs [
+    ; determine if dog is in the shelter or dog park
+    location
+
+    ; move in the space
     move
+
+    ; change states
+    (ifelse
+      ; if infected, potentially become susceptible
+      state = "infected" [
+        ; if poop on patch
+        if pcolor = brown [
+          ; if eating poop
+          if random-float 1 < 0.05 [
+            ; set patch color to default
+            patch_default
+          ]
+        ]
+        if random-float 1 < 0.002 [
+          become-susceptible
+        ]
+      ]
+
+      ; if exposed, potentially become infected
+      state = "exposed" [
+        ; if poop on patch
+        if pcolor = brown [
+          ; if eating poop
+          if random-float 1 < 0.05 [
+            ; set patch color to default
+            patch_default
+          ]
+        ]
+        if random-float 1 < 0.002 [
+          become-infected
+        ]
+      ]
+
+      ; if exposed, potentially become infected
+      state = "susceptible" [
+        ; if poop on patch
+        if pcolor = brown [
+          ; if eating poop
+          if random-float 1 < 0.05 [
+            ; set patch color to default
+            patch_default
+
+            ; if patch's poop infected
+            if infected [
+              ; potentially become exposed
+              if random-float 1 < 0.5 [
+                become-exposed
+              ]
+            ]
+          ]
+        ]
+      ])
+
+    ; potentially poop in the space
     poop
-    recover
-    if not sick? [
-      get_infected
-    ]
   ]
 
-  ask patches [
-    if pcolor = brown [
-      if random-float 1 < 0.01 [
-        set pcolor green
-      ]
-    ]
-  ]
-  update-global-variables
-  update-display
+;  ask patches [
+;    if random-float 1 < 0.05 [
+;      patch_default
+;      set infected false
+;    ]
+;  ]
+
+  ; update trackers and increase tick
+  update-globals
   tick
 end
 
 
-to move
-  ; move 0.1 forward in random direction
-  rt random 360
-  fd 0.5
-end
-
-
-to get_infected
-  ; if on patch with infected poop, possibly get infected
-  if infected_poop [
-    if random-float 1 < 0.5 [
-      if random-float 1 < 0.5 [
-        set sick? true
-      ]
-      set pcolor green
-      set infected_poop false
+to location
+  ;
+  ifelse shelter [
+    if random-float 1 < 0.05 [
+      set shelter false
+      random_park
+    ]
+  ] [
+    if random-float 1 < 0.01 [
+      set shelter true
+      random_shelter
     ]
   ]
 end
 
-to recover
-  if random-float 1 < 0.002 [
-    set sick? false
+
+to move
+  ; turn random direction
+  rt random 360
+
+  ; if the dog is in the shelter, move slower
+  ifelse shelter [
+    fd 0.25
+    ; if out of shelter bounds replace in random location
+    if xcor < 20 or ycor < 20 [
+      random_shelter
+    ]
+
+  ] [
+    fd 0.5
+    ; if out of shelter bounds replace in random location
+    if xcor >= 20 and ycor >= 20 [
+      random_park
+    ]
   ]
+end
+
+
+to become-susceptible
+  ; make the dog susceptible
+  set state "susceptible"
+  set color blue
+end
+
+
+to become-exposed
+  ; make the dog exposed
+  set state "exposed"
+  set color pink
+end
+
+
+to become-infected
+  ; make the dog infected
+  set state "infected"
+  set color red
 end
 
 
 to poop
   if random-float 1 < 0.01 [
     set pcolor brown
-    if sick? [
-      set infected_poop true
+    if state = "infected" [
+      set infected true
     ]
   ]
 end
 
 
-
-to update-global-variables
-  if count turtles > 0 [
-    set %infected (count turtles with [ sick? ] / count turtles) * 100
+to patch_default
+  ifelse pxcor >= 20 and pycor >= 20 [
+    set pcolor gray
+  ] [
+    set pcolor green
   ]
 end
 
-to update-display
-  ask turtles [
-    set color ifelse-value sick? [
-      red
-    ] [
-      blue
+
+to random_shelter
+  ; move to random location in shelter
+  set xcor (random-float 20) + 20
+  set ycor (random-float 20) + 20
+end
+
+
+to random_park
+  ; move to random location in park
+  let quad random 3
+  (ifelse
+    quad = 0 [
+      set xcor (random-float 20)
+      set ycor (random-float 20)
     ]
-  ]
+    quad = 1 [
+      set xcor (random-float 20) + 20
+      set ycor (random-float 20)
+    ]
+    quad = 2 [
+      set xcor (random-float 20)
+      set ycor (random-float 20) + 20
+    ])
 end
 
 
+to update-globals
+  let total count dogs
+  if total > 0 [
+    ; get percentages for dogs in dog park
+    set %susceptible (count dogs with [ state = "susceptible" and not shelter] / total) * 100
+    set %exposed (count dogs with [ state = "exposed" and not shelter] / total) * 100
+    set %infected (count dogs with [ state = "infected" and not shelter] / total) * 100
+
+    ; get percentages for dogs in shelter
+    set %susceptible_shelter (count dogs with [ state = "susceptible" and shelter] / total) * 100
+    set %exposed_shelter (count dogs with [ state = "exposed" and shelter] / total) * 100
+    set %infected_shelter (count dogs with [ state = "infected" and shelter] / total) * 100
+  ]
+end
 @#$#@#$#@
 GRAPHICS-WINDOW
 278
 10
-731
+730
 463
 -1
 -1
@@ -140,8 +263,8 @@ GRAPHICS-WINDOW
 1
 1
 0
-1
-1
+0
+0
 1
 0
 40
@@ -153,26 +276,11 @@ GRAPHICS-WINDOW
 ticks
 30.0
 
-SLIDER
-40
-130
-234
-163
-prob_infect
-prob_infect
-0.0
-1
-0.5
-0.01
-1
-NIL
-HORIZONTAL
-
 BUTTON
-62
-85
-132
-120
+63
+152
+133
+187
 NIL
 setup
 NIL
@@ -186,10 +294,10 @@ NIL
 1
 
 BUTTON
-138
-85
-209
-121
+139
+152
+210
+188
 NIL
 go
 T
@@ -218,40 +326,33 @@ true
 true
 "" ""
 PENS
-"Infected" 1.0 0 -2674135 true "" "plot count turtles with [ sick? ]"
-"Susceptible" 1.0 0 -13345367 true "" "plot count turtles with [ not sick? ]"
+"Susceptible" 1.0 0 -13345367 true "" "plot count dogs with [ state = \"susceptible\" and not shelter]"
+"Exposed" 1.0 0 -7500403 true "" "plot count dogs with [ state = \"exposed\" and not shelter]"
+"Infected" 1.0 0 -955883 true "" "plot count dogs with [ state = \"infected\" and not shelter]"
+"Susceptible_shelter" 1.0 0 -6459832 true "" "plot count dogs with [ state = \"susceptible\" and shelter]"
+"Exposed_shelter" 1.0 0 -1184463 true "" "plot count dogs with [ state = \"exposed\" and shelter]"
+"Infected_shelter" 1.0 0 -10899396 true "" "plot count dogs with [ state = \"infected\" and shelter]"
 
 SLIDER
 40
 10
 234
 43
-number-people
-number-people
-10
-300
-300.0
+number-park
+number-park
+0
+200
+200.0
 1
 1
 NIL
 HORIZONTAL
 
 MONITOR
-27
-260
-102
-305
-NIL
-%infected
-1
-1
-11
-
-MONITOR
-104
-260
-181
-305
+95
+201
+172
+246
 Total ticks
 ticks
 1
@@ -259,45 +360,45 @@ ticks
 11
 
 SLIDER
-39
-163
-235
-196
-prob_recover
-prob_recover
+40
+78
+234
+111
+sick-park
+sick-park
 0
-0.1
-0.02
-0.001
+100
+10.0
 1
-NIL
-HORIZONTAL
-
-SLIDER
-38
-196
-235
-229
-prob_lose_immunity
-prob_lose_immunity
-0
-0.1
-0.005
-0.001
 1
 NIL
 HORIZONTAL
 
 SLIDER
 40
-42
-234
-75
-initial_sick
-initial_sick
+44
+235
+78
+number-shelter
+number-shelter
+0
+200
+50.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+40
+111
+235
+145
+sick-shelter
+sick-shelter
 0
 100
-10.0
+0.0
 1
 1
 NIL
