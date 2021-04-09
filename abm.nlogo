@@ -1,63 +1,67 @@
 extensions [ vid csv ]
+globals [ %infected ]
+turtles-own [ sick? ]
+patches-own [ infected_poop ]
 
-turtles-own
-  [ sick? immune? ]
-
-globals
-  [ %infected %immune ]
 
 to setup
+  ; clear space
   clear-all
 
-  create-turtles number-people
-    [ setxy random-xcor random-ycor
-      set sick? false
-      set immune? false
-      set size 1  ;; easier to see
-      get-healthy ]
-  ask n-of initial_sick turtles [ get-sick ]
-
-  ask patches [
-    set pcolor green
+  ; create this many turtles with initial conditions
+  create-turtles number-people [
+    setxy random-xcor random-ycor
+    set sick? false
+    set size 1
+    get-healthy
   ]
 
+  ; set some turtles to be initially sick
+  ask n-of initial_sick turtles [ get-sick ]
+
+  ; set patch initials to color green and not infected poop
+  ask patches [
+    set pcolor green
+    set infected_poop false
+  ]
+
+  ; update trackers
   update-global-variables
   update-display
 
+  ; set shape to "dog"
   set-default-shape turtles "dog"
+
+  ; reset the video and ticks
   vid:reset-recorder
   reset-ticks
 end
 
-to get-sick ;; turtle procedure
+
+to get-sick
   set sick? true
-  set immune? false
 end
 
-to get-healthy ;; turtle procedure
-  set sick? false
-  set immune? false
-end
 
-to become-immune ;; turtle procedure
+to get-healthy
   set sick? false
-  set immune? true
 end
 
 to go
   ask turtles [
-
     move
     poop
-    if sick? [ recover ]
-    if sick? [ infect ]
-    if immune? [ lose-immunity ]
+    recover
+    if not sick? [
+      get_infected
+    ]
   ]
 
   ask patches [
     if pcolor = brown [
-      if random-float 1 < 0.01
-      [ set pcolor green]
+      if random-float 1 < 0.01 [
+        set pcolor green
+      ]
     ]
   ]
   update-global-variables
@@ -66,64 +70,70 @@ to go
 end
 
 
-to move ;; turtle procedure
-  rt random 100
-  lt random 100
-  fd 0.1
+to move
+  ; move 0.1 forward in random direction
+  rt random 360
+  fd 0.5
 end
 
-to infect ;; turtle procedure
-  ask other turtles-here with [ not sick? and not immune? ]
-    [ if random-float 1 < prob_infect
-      [ set sick? true
-        set immune? false
-  ] ]
-end
 
-to recover ;; turtle procedure
-  if random-float 1 < prob_recover   ;; either recover or die
-      [ set sick? false
-        set immune? true
+to get_infected
+  ; if on patch with infected poop, possibly get infected
+  if infected_poop [
+    if random-float 1 < 0.5 [
+      if random-float 1 < 0.5 [
+        set sick? true
+      ]
+      set pcolor green
+      set infected_poop false
+    ]
   ]
 end
 
-to lose-immunity ;; turtle procedure
-  if random-float 1 < prob_lose_immunity   ;; either recover or die
-      [ set sick? false
-        set immune? false
+to recover
+  if random-float 1 < 0.002 [
+    set sick? false
   ]
 end
+
 
 to poop
-  if random-float 1 < 0.01
-      [ set pcolor brown
+  if random-float 1 < 0.01 [
+    set pcolor brown
+    if sick? [
+      set infected_poop true
+    ]
   ]
 end
 
 
 
 to update-global-variables
-  if count turtles > 0
-    [ set %infected (count turtles with [ sick? ] / count turtles) * 100
-      set %immune (count turtles with [ immune? ] / count turtles) * 100 ]
+  if count turtles > 0 [
+    set %infected (count turtles with [ sick? ] / count turtles) * 100
+  ]
 end
 
 to update-display
-  ask turtles
-  [set color ifelse-value sick? [ red ] [ ifelse-value immune? [ grey ] [ green ] ] ]
+  ask turtles [
+    set color ifelse-value sick? [
+      red
+    ] [
+      blue
+    ]
+  ]
 end
-
 
 
 @#$#@#$#@
 GRAPHICS-WINDOW
 278
 10
-741
-474
+731
+463
 -1
 -1
-21.7
+10.85
 1
 10
 1
@@ -133,10 +143,10 @@ GRAPHICS-WINDOW
 1
 1
 1
--10
-10
--10
-10
+0
+40
+0
+40
 1
 1
 1
@@ -209,8 +219,7 @@ true
 "" ""
 PENS
 "Infected" 1.0 0 -2674135 true "" "plot count turtles with [ sick? ]"
-"Recovered" 1.0 0 -7500403 true "" "plot count turtles with [ immune? ]"
-"Susceptible" 1.0 0 -10899396 true "" "plot count turtles with [ not sick? and not immune? ]"
+"Susceptible" 1.0 0 -13345367 true "" "plot count turtles with [ not sick? ]"
 
 SLIDER
 40
@@ -241,19 +250,8 @@ NIL
 MONITOR
 104
 260
-178
+181
 305
-NIL
-%immune
-1
-1
-11
-
-MONITOR
-178
-261
-255
-306
 Total ticks
 ticks
 1
