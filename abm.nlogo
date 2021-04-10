@@ -1,59 +1,65 @@
-extensions [ vid csv ]
+extensions [ csv ]
 breed [ dogs dog ]
-globals [ %susceptible %exposed %infected %susceptible_shelter %exposed_shelter %infected_shelter ]
-turtles-own [ state shelter ]
-patches-own [ infected ]
+globals [ %susceptible_park %exposed_park %infected_park %susceptible_shelter %exposed_shelter %infected_shelter total values]
+turtles-own [ state in_shelter ]
+patches-own [ patch_infected ]
 
 
 to setup
-  ; clear space
+  ; clear space and reset ticks
   clear-all
+  reset-ticks
+
+  ; make values an empty list for exporting data
+  set values []
 
   ; set agent shape to "dog"
   set-default-shape dogs "dog"
 
   ; create this many dogs in the park
-  create-dogs number-park [
-    set size 1
-    set shelter false
+  create-dogs init-susceptible-in-park + init-infected-in-park [
+    set in_shelter false
     random_park
     become-susceptible
   ]
 
+  ; set some dogs in the park to be initially infected
+  ask n-of init-infected-in-park dogs with [not in_shelter] [
+    become-infected
+  ]
+
   ; create this many dogs in the shelter
-  create-dogs number-shelter [
-    set size 1
-    set shelter true
+  create-dogs init-susceptible-in-shelter + init-infected-in-shelter [
+    set in_shelter true
     random_shelter
     become-susceptible
   ]
 
-  ; set some dogs to be initially infected
-  ask n-of sick-park dogs with [not shelter] [
-    become-infected
-  ]
-
-  ; set some dogs to be initially infected
-  ask n-of sick-shelter dogs with [shelter] [
+  ; set some dogs in the shelter to be initially infected
+  ask n-of init-infected-in-shelter dogs with [in_shelter] [
     become-infected
   ]
 
   ; set patch initials to not infected poop
   ask patches [
-    set infected false
+    set patch_infected false
     patch_default
   ]
 
-  ; update trackers
+  ; update trackers for subgroups of population
   update-globals
-
-  ; reset the video and ticks
-  vid:reset-recorder
-  reset-ticks
 end
 
 
 to go
+  ; end simulation
+  if ticks = total-ticks [
+    let name word filename ".csv"
+    csv:to-file name values
+    stop
+  ]
+
+  ; have each of the dogs do the following
   ask dogs [
     ; determine if dog is in the shelter or dog park
     location
@@ -68,12 +74,12 @@ to go
         ; if poop on patch
         if pcolor = brown [
           ; if eating poop
-          if random-float 1 < 0.05 [
+          if random-float 1 < 0.5 [
             ; set patch color to default
             patch_default
           ]
         ]
-        if random-float 1 < 0.002 [
+        if random-float 1 < 0.01 [
           become-susceptible
         ]
       ]
@@ -83,12 +89,12 @@ to go
         ; if poop on patch
         if pcolor = brown [
           ; if eating poop
-          if random-float 1 < 0.05 [
+          if random-float 1 < 0.5 [
             ; set patch color to default
             patch_default
           ]
         ]
-        if random-float 1 < 0.002 [
+        if random-float 1 < 0.2 [
           become-infected
         ]
       ]
@@ -98,14 +104,14 @@ to go
         ; if poop on patch
         if pcolor = brown [
           ; if eating poop
-          if random-float 1 < 0.05 [
+          if random-float 1 < 0.5 [
             ; set patch color to default
             patch_default
 
             ; if patch's poop infected
-            if infected [
+            if patch_infected [
               ; potentially become exposed
-              if random-float 1 < 0.5 [
+              if random-float 1 < 0.75 [
                 become-exposed
               ]
             ]
@@ -117,13 +123,6 @@ to go
     poop
   ]
 
-;  ask patches [
-;    if random-float 1 < 0.05 [
-;      patch_default
-;      set infected false
-;    ]
-;  ]
-
   ; update trackers and increase tick
   update-globals
   tick
@@ -131,15 +130,17 @@ end
 
 
 to location
-  ;
-  ifelse shelter [
+  ; move from the shelter to the park and vice versa
+  ifelse in_shelter [
+    ; greater chance of getting adopted
     if random-float 1 < 0.05 [
-      set shelter false
+      set in_shelter false
       random_park
     ]
   ] [
+    ; lesser chance of entering the shelter
     if random-float 1 < 0.01 [
-      set shelter true
+      set in_shelter true
       random_shelter
     ]
   ]
@@ -151,17 +152,17 @@ to move
   rt random 360
 
   ; if the dog is in the shelter, move slower
-  ifelse shelter [
-    fd 0.25
+  ifelse in_shelter [
+    fd 0.5
     ; if out of shelter bounds replace in random location
-    if xcor < 20 or ycor < 20 [
+    if xcor < int max-pxcor / 2 or ycor < int max-pycor / 2 [
       random_shelter
     ]
 
   ] [
-    fd 0.5
-    ; if out of shelter bounds replace in random location
-    if xcor >= 20 and ycor >= 20 [
+    fd 1
+    ; if out of park bounds replace in random location
+    if xcor >= int max-pxcor / 2 and ycor >= int max-pycor / 2 [
       random_park
     ]
   ]
@@ -190,17 +191,22 @@ end
 
 
 to poop
-  if random-float 1 < 0.01 [
+  ; poop with probability 0.1
+  if random-float 1 < 0.1 [
+    ; change patch color
     set pcolor brown
+    ; if dog is infected set patch to be infected
     if state = "infected" [
-      set infected true
+      set patch_infected true
     ]
   ]
+
 end
 
 
 to patch_default
-  ifelse pxcor >= 20 and pycor >= 20 [
+  ; set patch color back to default for the shelter or the park
+  ifelse pxcor >= int max-pxcor / 2 and pycor >= int max-pycor / 2 [
     set pcolor gray
   ] [
     set pcolor green
@@ -210,8 +216,8 @@ end
 
 to random_shelter
   ; move to random location in shelter
-  set xcor (random-float 20) + 20
-  set ycor (random-float 20) + 20
+  set xcor (random-float int max-pxcor / 2) + int max-pxcor / 2
+  set ycor (random-float int max-pycor / 2) + int max-pycor / 2
 end
 
 
@@ -220,43 +226,39 @@ to random_park
   let quad random 3
   (ifelse
     quad = 0 [
-      set xcor (random-float 20)
-      set ycor (random-float 20)
+      set xcor (random-float int max-pxcor / 2)
+      set ycor (random-float int max-pycor / 2)
     ]
     quad = 1 [
-      set xcor (random-float 20) + 20
-      set ycor (random-float 20)
+      set xcor ((random-float int max-pxcor / 2) + int max-pxcor / 2)
+      set ycor (random-float int max-pycor / 2)
     ]
     quad = 2 [
-      set xcor (random-float 20)
-      set ycor (random-float 20) + 20
+      set xcor (random-float int max-pxcor / 2)
+      set ycor ((random-float int max-pycor / 2) + int max-pycor / 2)
     ])
 end
 
 
 to update-globals
-  let total count dogs
-  if total > 0 [
-    ; get percentages for dogs in dog park
-    set %susceptible (count dogs with [ state = "susceptible" and not shelter] / total) * 100
-    set %exposed (count dogs with [ state = "exposed" and not shelter] / total) * 100
-    set %infected (count dogs with [ state = "infected" and not shelter] / total) * 100
-
-    ; get percentages for dogs in shelter
-    set %susceptible_shelter (count dogs with [ state = "susceptible" and shelter] / total) * 100
-    set %exposed_shelter (count dogs with [ state = "exposed" and shelter] / total) * 100
-    set %infected_shelter (count dogs with [ state = "infected" and shelter] / total) * 100
-  ]
+  set total count dogs
+  set %susceptible_park (count dogs with [ state = "susceptible" and not in_shelter]) / total
+  set %exposed_park (count dogs with [ state = "exposed" and not in_shelter]) / total
+  set %infected_park (count dogs with [ state = "infected" and not in_shelter]) / total
+  set %susceptible_shelter (count dogs with [ state = "susceptible" and in_shelter]) / total
+  set %exposed_shelter (count dogs with [ state = "exposed" and in_shelter]) / total
+  set %infected_shelter (count dogs with [ state = "infected" and in_shelter]) / total
+  set values lput (list %susceptible_park %exposed_park %infected_park %susceptible_shelter %exposed_shelter %infected_shelter) values
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
 278
 10
-730
-463
+751
+484
 -1
 -1
-10.85
+15.0
 1
 10
 1
@@ -267,9 +269,9 @@ GRAPHICS-WINDOW
 0
 1
 0
-40
+30
 0
-40
+30
 1
 1
 1
@@ -277,10 +279,10 @@ ticks
 30.0
 
 BUTTON
-63
-152
-133
-187
+61
+208
+131
+243
 NIL
 setup
 NIL
@@ -294,10 +296,10 @@ NIL
 1
 
 BUTTON
-139
-152
-210
-188
+137
+208
+208
+244
 NIL
 go
 T
@@ -321,54 +323,43 @@ people
 0.0
 52.0
 0.0
-200.0
+1.0
 true
 true
 "" ""
 PENS
-"Susceptible" 1.0 0 -13345367 true "" "plot count dogs with [ state = \"susceptible\" and not shelter]"
-"Exposed" 1.0 0 -7500403 true "" "plot count dogs with [ state = \"exposed\" and not shelter]"
-"Infected" 1.0 0 -955883 true "" "plot count dogs with [ state = \"infected\" and not shelter]"
-"Susceptible_shelter" 1.0 0 -6459832 true "" "plot count dogs with [ state = \"susceptible\" and shelter]"
-"Exposed_shelter" 1.0 0 -1184463 true "" "plot count dogs with [ state = \"exposed\" and shelter]"
-"Infected_shelter" 1.0 0 -10899396 true "" "plot count dogs with [ state = \"infected\" and shelter]"
+"Susceptible-in-park" 1.0 0 -13345367 true "" "plot %susceptible_park"
+"Exposed-in-park" 1.0 0 -7500403 true "" "plot %exposed_park"
+"Infected-in-park" 1.0 0 -955883 true "" "plot %infected_park"
+"Susceptible-in-shelter" 1.0 0 -6459832 true "" "plot %susceptible_shelter"
+"Exposed-in-shelter" 1.0 0 -1184463 true "" "plot %exposed_shelter"
+"Infected-in-shelter" 1.0 0 -10899396 true "" "plot %infected_shelter"
 
 SLIDER
 40
 10
 234
 43
-number-park
-number-park
+init-susceptible-in-park
+init-susceptible-in-park
 0
-200
-200.0
+500
+360.0
 1
 1
 NIL
 HORIZONTAL
-
-MONITOR
-95
-201
-172
-246
-Total ticks
-ticks
-1
-1
-11
 
 SLIDER
 40
 78
 234
 111
-sick-park
-sick-park
+init-infected-in-park
+init-infected-in-park
 0
 100
-10.0
+40.0
 1
 1
 NIL
@@ -378,12 +369,12 @@ SLIDER
 40
 44
 235
-78
-number-shelter
-number-shelter
+77
+init-susceptible-in-shelter
+init-susceptible-in-shelter
 0
-200
-50.0
+500
+360.0
 1
 1
 NIL
@@ -393,16 +384,118 @@ SLIDER
 40
 111
 235
-145
-sick-shelter
-sick-shelter
+144
+init-infected-in-shelter
+init-infected-in-shelter
 0
 100
-0.0
+40.0
 1
 1
 NIL
 HORIZONTAL
+
+SLIDER
+39
+166
+234
+199
+total-ticks
+total-ticks
+0
+1000
+606.0
+1
+1
+NIL
+HORIZONTAL
+
+MONITOR
+770
+525
+885
+570
+Susceptible-in-shelter
+count dogs with [in_shelter and state = \"susceptible\"]
+17
+1
+11
+
+MONITOR
+887
+525
+1004
+570
+Exposed-in-shelter
+count dogs with [in_shelter and state = \"exposed\"]
+17
+1
+11
+
+MONITOR
+1005
+526
+1110
+571
+Infected-in-shelter
+count dogs with [in_shelter and state = \"infected\"]
+17
+1
+11
+
+MONITOR
+770
+479
+885
+524
+Susceptible-in-park
+count dogs with [not in_shelter and state = \"susceptible\"]
+17
+1
+11
+
+MONITOR
+887
+479
+1005
+524
+Exposed-in-park
+count dogs with [not in_shelter and state = \"exposed\"]
+17
+1
+11
+
+MONITOR
+1006
+479
+1110
+524
+Infected-in-park
+count dogs with [not in_shelter and state = \"infected\"]
+17
+1
+11
+
+INPUTBOX
+27
+311
+260
+371
+filename
+87.0
+1
+0
+Number
+
+TEXTBOX
+35
+277
+248
+319
+The name of the CSV file. This is used to run multiple simulations
+11
+0.0
+1
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -832,6 +925,29 @@ NetLogo 6.1.1
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
+<experiments>
+  <experiment name="experiment" repetitions="1" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <metric>count turtles</metric>
+    <steppedValueSet variable="filename" first="1" step="1" last="100"/>
+    <enumeratedValueSet variable="init-susceptible-in-shelter">
+      <value value="360"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="total-ticks">
+      <value value="606"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="init-infected-in-shelter">
+      <value value="40"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="init-susceptible-in-park">
+      <value value="360"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="init-infected-in-park">
+      <value value="40"/>
+    </enumeratedValueSet>
+  </experiment>
+</experiments>
 @#$#@#$#@
 @#$#@#$#@
 default
